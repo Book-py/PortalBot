@@ -239,6 +239,7 @@ class Bot(BotBase):
 						colour=message.author.colour,
 						timestamp=datetime.utcnow())
 					embed.set_author(name=message.author.name, icon_url=message.author.avatar_url)
+					embed.set_footer(text=f"Message from: {message.guild.name}", icon_url=message.guild.icon_url)
 
 					books_portal = self.get_channel(829961274279985192)
 					await books_portal.send(embed=embed)
@@ -252,6 +253,7 @@ class Bot(BotBase):
 						colour=message.author.colour,
 						timestamp=datetime.utcnow())
 					embed.set_author(name=message.author.name, icon_url=message.author.avatar_url)
+					embed.set_footer(text=f"Message from: {message.guild.name}", icon_url=message.guild.icon_url)
 
 					books_portal = self.get_channel(829961182752407592)
 					await books_portal.send(embed=embed)
