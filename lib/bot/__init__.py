@@ -1,261 +1,131 @@
 import traceback
-from asyncio import sleep
 from datetime import datetime
-from glob import glob
+from pathlib import Path
+import asyncio
+import typing
 
-from apscheduler.schedulers.asyncio import AsyncIOScheduler
-from discord import DMChannel, Embed, Intents
-from discord.errors import Forbidden, HTTPException
-from discord.ext.commands import BadArgument
-from discord.ext.commands import Bot as BotBase
-from discord.ext.commands import (BotMissingPermissions, CheckFailure,
-								  CommandNotFound, CommandOnCooldown, Context,
-								  ExpectedClosingQuoteError,
-								  InvalidEndOfQuotedStringError,
-								  MissingPermissions, MissingRequiredArgument,
-								  NotOwner, TooManyArguments, UserInputError,
-								  when_mentioned_or)
+import discord
+from discord.ext import commands
 
-OWNER_IDS = [700336923264155719, 769708895572197437, 380160133172428806]
-COGS = [path.split("\\")[-1][:-3] for path in glob('./lib/cogs/*.py')]
-ERROR_CHANNEL = 825357854566776832
+OWNER_IDS = [781305692371157034, 700336923264155719]
+ERROR_CHANNEL = 931866921266216984
+COGS = [p.stem for p in Path(".").glob("./lib/cogs/*.py")]
+
 
 def get_prefix(bot, message):
-	return when_mentioned_or("+")(bot, message)
-
-class Ready(object):
-	def __init__(self):
-		for cog in COGS:
-			setattr(self, cog, False)
-
-	def ready_up(self, cog):
-		setattr(self, cog, True)
-		print(f'{cog} cog ready!')
-
-	def all_ready(self):
-		return all([getattr(self, cog) for cog in COGS])
-
-class Bot(BotBase):
-	def __init__(self):
-		self.ready = False
-		self.cogs_ready = Ready()
-		self.scheduler = AsyncIOScheduler()
-
-		super().__init__(
-			command_prefix=get_prefix,
-			owner_ids=OWNER_IDS,
-			intents=Intents.all())
-
-	async def keep_open(self):
-		portal = self.get_channel(829961182752407592)
-		await portal.send("Keeping this session open")
-
-	def setup(self):
-		for cog in COGS:
-			self.load_extension(f'lib.cogs.{cog}')
-			print(f'{cog} cog loaded')
-		print("setup complete")
-	
-	def run(self, version):
-		self.VERSION = version
-		print(f'running setup in version {version}...')
-
-		self.setup()
-
-		with open("./lib/bot/token.0", "r") as tf:
-			self.TOKEN = tf.read()
-
-		print("Running bot...")
-		super().run(self.TOKEN, reconnect=True)
-
-	def prefix(self, guild):
-		if guild is not None:
-			return "*"
-
-	async def on_connect(self):
-		print("Bot connected!")
-
-	async def on_disconnect(self):
-		print("Bot disconnected")
-
-	async def on_error(self, event, *args, **kwargs):
-		print('py\n%s\n' % traceback.format_exc())
-		if event == "on_command_error":
-			await args[0].send("Something went wrong.")
-
-		e = Embed(title='Event Error' if event != "on_command_error" else "Command Error", colour=0xa32952)
-		e.add_field(name='Event', value=event if event != "on_command_error" else "Command Error")
-		e.description = '```py\n%s\n```' % traceback.format_exc()
-		try:
-			big_xd = f"Name: {args[0].guild.name}\nID: {args[0].guild.id}"
-			e.add_field(name="location", value=big_xd)
-		except:
-			pass
+    return commands.when_mentioned_or("+")(bot, message)
 
 
-		e.timestamp = datetime.utcnow()
-		ch = self.get_channel(ERROR_CHANNEL)
-		try:
-			await ch.send(embed=e)
-		except:
-			await ch.send("tried sending an error but no xd")
+class Ready:
+    def __init__(self):
+        for cog in COGS:
+            setattr(self, cog, False)
 
-	async def on_command_error(self, ctx, exc):
-		if isinstance(exc, CommandNotFound):
-			pass
+    def ready_up(self, cog):
+        setattr(self, cog, True)
+        print(f" {cog} cog ready")
 
-		elif isinstance(exc, MissingRequiredArgument):
-			await ctx.send(f"No `{exc.param.name}` argument was passed, despite being required.")
+    def all_ready(self):
+        return all([getattr(self, cog) for cog in COGS])
 
-		elif isinstance(exc, BadArgument):
-			embed = Embed(
-				title="There was a problem",
-				description="One or more arguments are invalid.",
-				colour=0xFF0000,
-				timestamp=datetime.utcnow())
-			await ctx.send(embed=embed)
 
-		elif isinstance(exc, TooManyArguments):
-			embed = Embed(
-				title="There was a problem",
-				description="Too many arguments have been passed.",
-				colour=0xFF0000,
-				timestamp=datetime.utcnow())
-			await ctx.send(embed=embed)
+class Bot(commands.Bot):
+    def __init__(self):
+        self.ready = False
+        self.cogs_ready = Ready()
 
-		elif isinstance(exc, MissingPermissions):
-			embed = Embed(
-				title="There was a problem",
-				description="You don't have the permissions required to use that command",
-				colour=0xFF0000,
-				timestamp=datetime.utcnow())
-			await ctx.send(embed=embed)
+        super().__init__(
+            command_prefix=get_prefix,
+            owner_ids=OWNER_IDS,
+            intents=discord.Intents.all(),
+        )
 
-		elif isinstance(exc, BotMissingPermissions):
-			embed = Embed(
-				title="There was a problem",
-				description="I don't have the correct permissions to complete that command",
-				colour=0xFF0000,
-				timestamp=datetime.utcnow())
-			await ctx.send(embed=embed)
+    def run(self, version):
+        self.VERSION = version
+        print(f"running setup in version {version}...")
 
-		elif isinstance(exc, NotOwner):
-			embed = Embed(
-				title="There was a problem",
-				description="Only BonkBot's owner can use that command. Sorry",
-				colour=0xFF0000,
-				timestamp=datetime.utcnow())
-			await ctx.send(embed=embed)
+        with open("./lib/bot/token.0", "r") as tf:
+            self.TOKEN = tf.read()
 
-		elif isinstance(exc, CommandOnCooldown):
-			cooldown_texts = {
-			"BucketType.user": "You can not use the `{}` command for another {}. seconds",
-			"BucketType.guild": "The `{}` command can not be used in this server for another {} seconds.",
-			"BucketType.channel": "The `{}` command can not be used in this channel for another {} seconds.",
-			"BucketType.member": "You can not use the `{}` command in this server for another {} seconds.",
-			"BucketType.category": "The `{}` command can not be used in this category for another {} seconds.",
-			}
-			await ctx.message.delete()
-			embed = Embed(
-				title="There was a problem",
-				description=cooldown_texts[str(exc.cooldown.type)].format(ctx.command.name, exc.retry_after),
-				colour=0xFF0000,
-				timestamp=datetime.utcnow())
-			await ctx.send(embed=embed)
+        print("Running bot...")
+        self.setup()
+        super().run(self.TOKEN, reconnect=True)
 
-		elif isinstance(exc, InvalidEndOfQuotedStringError):
-			embed = Embed(
-				title="There was a problem",
-				description=f"Bonk expected a space after the closing quote, but found a(n) `{exc.char}` instead.",
-				colour=0xFF0000,
-				timestamp=datetime.utcnow())
-			await ctx.send(embed=embed)
+    def setup(self):
+        for cog in COGS:
+            self.load_extension(f"lib.cogs.{cog}")
+            print(f" {cog} cog loaded")
 
-		elif isinstance(exc, ExpectedClosingQuoteError):
-			embed = Embed(
-				title="There was a problem",
-				description="Bonk expected a closing quote character, but didn't find one.",
-				colour=0xFF0000,
-				timestamp=datetime.utcnow())
-			await ctx.send(embed=embed)
+    async def on_connect(self):
+        print("Bot connected!")
 
-		elif isinstance(exc, UserInputError):
-			embed = Embed(
-				title="There was a problem",
-				description="There was an unhandled user input problem (probably argument passing error).",
-				colour=0xFF0000,
-				timestamp=datetime.utcnow())
-			await ctx.send(embed=embed)
+    async def on_disconnect(self):
+        print("Bot disconnected")
 
-		elif isinstance(exc, CheckFailure):
-			embed = Embed(
-				title="There was a problem",
-				description="There was an unhandled command check error (probably missing privileges).",
-				colour=0xFF0000,
-				timestamp=datetime.utcnow())
-			await ctx.send(embed=embed)
+    async def on_error(self, event, *args, **kwargs):
+        print("py\n%s\n" % traceback.format_exc())
+        if event == "on_command_error":
+            await args[0].send("Something went wrong.")
 
-		elif hasattr(exc, "original"):
-			if isinstance(exc.original, HTTPException):
-				await ctx.send("There was a problem with discord (if muting, probably adding the role failed)")
+        e = discord.Embed(
+            title="Event Error" if event != "on_command_error" else "Command Error",
+            colour=0xA32952,
+        )
+        e.add_field(
+            name="Event",
+            value=event if event != "on_command_error" else "Command Error",
+        )
+        e.description = "```py\n%s\n```" % traceback.format_exc()
+        try:
+            big_xd = f"Name: {args[0].guild.name}\nID: {args[0].guild.id}"
+            e.add_field(name="location", value=big_xd)
+        except:
+            pass
 
-			if isinstance(exc.original, Forbidden):
-				embed = Embed(
-					title="There was a problem",
-					description="There was an unhandled command check error (probably missing privileges).",
-					colour=0xFF0000,
-					timestamp=datetime.utcnow())
-				await ctx.send(embed=embed)
+        e.timestamp = datetime.utcnow()
+        ch = self.get_channel(ERROR_CHANNEL)
+        try:
+            await ch.send(embed=e)
+        except:
+            await ch.send("tried sending an error but no xd")
 
-			else:
-				raise exc.original
+    async def on_command_error(
+        self, ctx: commands.Context, error
+    ) -> typing.Coroutine[any, any, None]:
+        if isinstance(error, commands.NotOwner):
+            return await ctx.send("That command can only be used by a bot owner")
+        if isinstance(error, commands.MissingRequiredArgument):
+            return await ctx.send("You are missing at least 1 required argument")
+        if isinstance(error, commands.CommandNotFound):
+            pass
 
-		else:
-			raise exc
+        if hasattr(error, "original"):
+            if isinstance(error.original, ValueError):
+                return await ctx.send("That is not a valid status type")
+            else:
+                raise error.original
 
-	async def on_ready(self):
-		if not self.ready:
-			self.bot_channel = self.get_channel(782694805720662026)
+        raise error
 
-			await self.bot_channel.send("Now online")
-			await self.bot_channel.send("------------------------------------------------------------")
+    async def on_ready(self):
+        if not self.ready:
+            self.log_channel = self.get_channel(931866921266216984)
 
-			while not self.cogs_ready.all_ready():
-				await sleep(0.1)
+            while not self.cogs_ready.all_ready():
+                await asyncio.sleep(0.5)
 
-			print("Bot ready!")
-		else:
-			print("Bot connected")
-	
-	async def on_message(self, message):
-		if not message.author.bot:
-			if message.guild.id == 777500671922012170:
-				# Books server
-				if message.channel.id == 829961182752407592:
-					# In the correct channel
-					embed = Embed(
-						title="New message",
-						description=message.content,
-						colour=message.author.colour,
-						timestamp=datetime.utcnow())
-					embed.set_author(name=message.author.name, icon_url=message.author.avatar_url)
-					embed.set_footer(text=f"Message from: {message.guild.name}", icon_url=message.guild.icon_url)
+            await self.log_channel.send("Now online")
+            await self.log_channel.send(
+                "------------------------------------------------------------"
+            )
 
-					books_portal = self.get_channel(829961274279985192)
-					await books_portal.send(embed=embed)
-			else:
-				# Reubens server
-				if message.channel.id == 829961274279985192:
-					# In the correct channel
-					embed = Embed(
-						title="New message",
-						description=message.content,
-						colour=message.author.colour,
-						timestamp=datetime.utcnow())
-					embed.set_author(name=message.author.name, icon_url=message.author.avatar_url)
-					embed.set_footer(text=f"Message from: {message.guild.name}", icon_url=message.guild.icon_url)
+            print("Bot ready!")
+            self.ready = True
 
-					books_portal = self.get_channel(829961182752407592)
-					await books_portal.send(embed=embed)
+            misc = self.get_cog("misc")
+            await misc.set()
+        else:
+            print("Bot connected")
+
 
 bot = Bot()
